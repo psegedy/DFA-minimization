@@ -45,18 +45,23 @@ multipleTransitions x = concat $ map (zip (fst x)) (chunksOf 1 (snd x))
 -- Make DFA well defined - add sink state
 wellDefined dfa
     | (concat $ map (missingSymbols dfa) (states dfa)) == "" = dfa   -- dfa is well defined
-    | otherwise = dfa {states = insert (show $ newStateNum dfa) (states dfa), transitions = (transitions dfa) ++ (missingTransitions dfa) } -- add sink state
+    | otherwise = dfa { states = (statesWithSink dfa)
+                      , transitions = (transitions dfa) ++ (missingTransitions dfa) 
+                      } -- add sink state
 
 -- get missing transitions in [Transition] format
 missingTransitions dfa = map (\x -> Transition [(fst x)] (show $ newStateNum dfa) [(snd x)]) missing
     where
         -- [("1",""),("2","a"),("3","ab")]
-        zipped = zip (states dfa) $ map (missingSymbols dfa) (states dfa)
+        zipped = zip (statesWithSink dfa) $ map (missingSymbols dfa) (statesWithSink dfa)
         -- [('2','a'),('3','a'),('3','b')]
         missing = concat $ map (multipleTransitions) (filter (sndNotEmpty) zipped)
 
 -- get next free state - e.g. use it as sink state
 newStateNum dfa = succ $ head $ sortDesc $ stoi (states dfa)
+
+-- add sink state to states
+statesWithSink dfa = insert (show $ newStateNum dfa) (states dfa)
 
 -- get missing symbols for state
 -- DFA, state, missing symbols
