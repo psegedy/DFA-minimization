@@ -30,6 +30,39 @@ commaSeparated = intercalate ","
 stoi :: [String] -> [Int]
 stoi = map read
 
+-- Sort list by descending order
+sortDesc = sortBy (flip compare)
+
+-- True if second element (transition symbol) of tuple is not empty
+sndNotEmpty x
+    | snd x == "" = False
+    | otherwise   = True
+
+-- second elem in tuple (transitions symbol) is longer than 1
+-- split it to multiple tuples
+multipleTransitions x = concat $ map (zip (fst x)) (chunksOf 1 (snd x))
+
+-- Make DFA well defined - add sink state
+wellDefined dfa
+    | (concat $ map (missingSymbols dfa) (states dfa)) == "" = dfa   -- dfa is well defined
+    | otherwise = dfa {states = insert (show $ newStateNum dfa) (states dfa), transitions = (transitions dfa) ++ (missingTransitions dfa) } -- add sink state
+
+-- get missing transitions in [Transition] format
+missingTransitions dfa = map (\x -> Transition [(fst x)] (show $ newStateNum dfa) [(snd x)]) missing
+    where
+        -- [("1",""),("2","a"),("3","ab")]
+        zipped = zip (states dfa) $ map (missingSymbols dfa) (states dfa)
+        -- [('2','a'),('3','a'),('3','b')]
+        missing = concat $ map (multipleTransitions) (filter (sndNotEmpty) zipped)
+
+-- get next free state - e.g. use it as sink state
+newStateNum dfa = succ $ head $ sortDesc $ stoi (states dfa)
+
+-- get missing symbols for state
+-- DFA, state, missing symbols
+missingSymbols :: DFA -> String -> String
+missingSymbols dfa state = alphabet dfa \\ concat [x !! 1 | x <- (map (\t -> [start t, symbol t]) (transitions dfa)), x !! 0 == state]
+
 -- Check that args are correct
 validArgs args
     | not $ elem (length args) [1,2] = False        -- more than 2 args
@@ -59,7 +92,7 @@ printTransition trans = start trans ++ "," ++ symbol trans ++ "," ++ dest trans
 -- parse given input as DFA
 readDFA content = DFA {
     states = splitOn "," (content !! 0),
-    alphabet = [x | x <- concat (drop 3 content), x `elem` ['a'..'z']],
+    alphabet = nub [x | x <- concat (drop 3 content), x `elem` ['a'..'z']],
     -- alphabet = intersect (concat (drop 3 content)) ['a'..'z'],
     -- getAlphabet trans = map (splitOn ",") ["4,b,6","7,c,9"]
     transitions = getTransitions (drop 3 content),
@@ -74,6 +107,7 @@ printFA fa = do
     putStrLn $ commaSeparated (fStates fa)
     putStrLn . unlines $ map printTransition (transitions fa)
 
+
 main = do
     args <- getArgs
     if not $ validArgs args
@@ -83,7 +117,7 @@ main = do
             let dfa = readDFA $ lines content
             print $ length content -- hack, avoid lazy evaluation - do it properly with deepseq if needed
             case (head args) of "-i" -> printFA dfa
-                                "-t" -> error "Not implemented yet"
+                                "-t" -> printFA $ wellDefined dfa -- TODO: reduce
                                 otherwise -> error "First argument should be '-i' or '-t'"
             print dfa -- debug print whole DFA structure
 
