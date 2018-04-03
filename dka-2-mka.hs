@@ -6,10 +6,9 @@ module Main where
 
 import           Data.List
 import           Data.List.Split
-import Data.Function
--- import Data.Ord
+import           Data.Function
 import           System.Environment
-import Debug.Trace
+import           Debug.Trace
 
 -- Data structure for transitions of finite automata
 data Transition = Transition    { start  :: String
@@ -72,35 +71,8 @@ missingSymbols :: DFA -> String -> String
 missingSymbols dfa state = alphabet dfa \\ concat [x !! 1 | x <- (map (\t -> [start t, symbol t]) (transitions dfa)), x !! 0 == state]
 
 -- Minimize finite automata using k-distinguishability
-
---(zip [1..] . sort . map sort $ s).
--- First split to two groups, final and non-final states
-kDistingInit dfa = ((states dfa) \\ (fStates dfa)) : (fStates dfa) : []
-
-
-
--- NOTE: skompilovalo ale nebude to dobre...
--- NOTE2: dest samostatne pre kazdy symbol, nie spolu...
--- kDisting dfa partitions
--- kDisting dfa [] = []
--- kDisting dfa [[]] = []
--- -- kDisting dfa (x:xs) = eqPartition dfa x : (kDisting dfa xs)
--- kDisting dfa (x:xs)
---     | eqPartition dfa x = x : (kDisting dfa xs)
---     | otherwise = kDisting dfa xs
-
--- eqPartition dfa [[]] = False
--- eqPartition dfa [] = False
--- eqPartition dfa (x:xs)
---     | (map (getDsts dfa x \\ [x]) (chunksOf 1 (alphabet dfa))) == [] = True
---     | otherwise = eqPartition dfa xs
-
-
--- TODO: sort kDists before eqPartitions
--- map sort []
-
 minStates dfa = zip [1..] . sort . map sort $ filter (not . null) $  getKDist dfa (states dfa) (sortByLength $ getKDist'' dfa (kDistingInit dfa) (getKDist' dfa))
--- minStates dfa = zip [1..] . sort . map sort $ filter (not . null) $  getKDist dfa (states dfa) (getKDist' dfa)
+
 minStartStates dfa = show . head $ map (\x -> fst x) $ filter (\x -> snd x == True) $ map (\x -> (fst x, (sState dfa) `elem` snd x)) (minStates dfa)
 
 minFinStates dfa [] = []
@@ -112,7 +84,6 @@ minimize dfa = DFA {
     states = map (show . fst) (minStates dfa),
     alphabet = alphabet dfa,
     transitions = concat $ map (concat . minTransitions dfa) (chunksOf 1 (alphabet dfa)),
-    -- transitions = transitions dfa,
     sState = minStartStates dfa,
     fStates = nub $ minFinStates dfa (fStates dfa)
 }
@@ -120,10 +91,13 @@ minimize dfa = DFA {
 -- https://stackoverflow.com/questions/2307893/sorting-lists-of-lists-in-haskell
 sortByLength list = concat (groupBy ((==) `on` length) $ sortBy (compare `on` length) list)
 
+-- Get k-distinguishable partitions
+-- First split to two groups, final and non-final states
+kDistingInit dfa = ((states dfa) \\ (fStates dfa)) : (fStates dfa) : []
+
 getKDist dfa states [] = []
 getKDist dfa states (x:xs)
-    | {-trace ("length = " ++ show (length states) ++ " x = " ++ show x ++ "inters = " ++ show (intersect x states) ++ "xs= " ++ show xs ++ " x:xs= " ++ show (x:xs))-} length states > 0 = (intersect x states) : getKDist dfa (states \\ x) xs
-    -- | otherwise = getKDist dfa x xs
+    | length states > 0 = (intersect x states) : getKDist dfa (states \\ x) xs
     | otherwise = []
 
 getKDist' dfa = sortByLength $ nub $ concat $ map (kDisting dfa (kDistingInit dfa) (kDistingInit dfa)) (chunksOf 1 (alphabet dfa))
@@ -135,57 +109,19 @@ getKDist'' dfa input output
             getKDist''' = nub $ concat $ map (kDisting dfa output output) (chunksOf 1 (alphabet dfa))
 
 
-
--- sameGroup = [ x | x <- getKDist' dfa, getDsts dfa x "a" ]
-
--- getCommonGroup dfa kDists
-
--- getDstsForGroups dfa [] alpha = []
--- getDstsForGroups dfa (x:xs) alpha = getDsts dfa x alpha : getDstsForGroups dfa xs alpha
-
--- f :: DFA -> [[String]] -> String -> [[String]]
--- f dfa [] sym = []
--- f dfa (x:xs) sym
---     | sortListElems (getDsts dfa x sym) == (concat $ (getDests dfa (f dfa xs sym) sym)) = x : f dfa xs sym
---     | otherwise = f dfa xs sym
-
--- getNext [] = []
--- getNext (x:_) = x
-
-getDstsForGroups dfa [] sym = []
-getDstsForGroups dfa (x:xs) sym = getDsts dfa x sym : getDstsForGroups dfa xs sym
-
-sortListElems :: Ord a => [[a]] -> [[a]]
-sortListElems = map sort
-
-
--- kDisting dfa [[[]]] _ _ = []
 kDisting dfa [[]] _ _ = []
 kDisting dfa [] _ _ = []
 kDisting dfa ([]:xs) kDists sym = kDisting dfa xs kDists sym
 kDisting dfa (x:xs) kDists sym
-    | {-trace ("A x = " ++ show x ++ "xs= " ++ show xs ++ " x:xs= " ++ show (x:xs))-} eqPartitions dfa x sym (map sort kDists) = x : kDisting dfa xs kDists sym
-    | {-trace ("B x = " ++ show x ++ "xs= " ++ show xs)-} otherwise = kDisting dfa (xs ++ splitGroup) (kDists ++ splitGroup) sym
-    where 
-        -- splitGroup = nub $ map (nub . getSrcs dfa sym) (getDsts dfa x sym)
-        -- commonGroup [] part = []
-        -- commonGroup (y:ys) part
-        --     |  y `elem` part = (getSrcs dfa sym y) : commonGroup ys part
-        --     | otherwise = commonGroup ys part
-        -- splitGroup = nub $ map (concat . commonGroup (getDsts dfa x sym)) kDists
-
+    | eqPartitions dfa x sym (map sort kDists) = x : kDisting dfa xs kDists sym
+    | otherwise = kDisting dfa (xs ++ splitGroup) (kDists ++ splitGroup) sym
+    where
         commonGroup [] part = []
         commonGroup (y:ys) part
-            | {-trace ("C y = " ++ show y ++ "part = " ++ show part)-} (getDst dfa sym y) \\ part == [] = y : commonGroup ys part
-            | {-trace ("D y = " ++ show y ++ "part = " ++ show part)-} otherwise = commonGroup ys part
+            | (getDst dfa sym y) \\ part == [] = y : commonGroup ys part
+            | otherwise = commonGroup ys part
         splitGroup = nub $ map (commonGroup x) kDists
 
---(intersect (getSrcs dfa sym y) part)
-
--- commonGroup [] part = []
--- commonGroup (x:xs) part
---     | x `elem` part = x : commonGroup xs part
---     | otherwise = commonGroup xs part
 
 -- checks that all states of partition lead to same k-distinguishable group
 eqPartitions dfa part sym kDists = any (==True) (map (eqPartition (getDsts dfa part sym)) kDists)
@@ -208,16 +144,6 @@ getDst dfa sym src = [x !! 2 | x <- (map (\t -> [start t, symbol t, dest t]) (tr
 getDsts :: DFA -> [String] -> String -> [String]
 getDsts dfa src sym = nub . concat $ map (getDst dfa sym) src
 
--- getDests dfa [] sym = []
--- getDests dfa (x:xs) sym = getDsts dfa x sym  : getDests dfa xs sym
-
--- get sources to given dest and symbol
-getSrcs :: DFA -> String -> String -> [String]
-getSrcs dfa sym dst = [x !! 0 | x <- (map (\t -> [start t, symbol t, dest t]) (transitions dfa)), x !! 2 == dst, x !! 1 == sym]
-
--- alphabet list -> [String]
--- (chunksOf 1 (alphabet dfa))
-
 -- Check that args are correct
 validArgs args
     | not $ elem (length args) [1,2] = False        -- more than 2 args
@@ -227,7 +153,6 @@ validArgs args
 
 -- Read stdin or file
 -- return content
-
 getMyContents args
     | length args == 1 = getContents
     | otherwise        = readFile $ args !! 1
@@ -249,8 +174,6 @@ printTransition trans = start trans ++ "," ++ symbol trans ++ "," ++ dest trans
 readDFA content = DFA {
     states = splitOn "," (content !! 0),
     alphabet = nub [x | x <- concat (drop 3 content), x `elem` ['a'..'z']],
-    -- alphabet = intersect (concat (drop 3 content)) ['a'..'z'],
-    -- getAlphabet trans = map (splitOn ",") ["4,b,6","7,c,9"]
     transitions = getTransitions (drop 3 content),
     sState = content !! 1,
     fStates = splitOn "," (content !! 2)
@@ -271,17 +194,6 @@ main = do
         else do
             content <- getMyContents args
             let dfa = readDFA $ lines content
-            -- print $ length content -- hack, avoid lazy evaluation - do it properly with deepseq if needed
             case (head args) of "-i" -> printFA dfa
-                                "-t" -> printFA $ minimize dfa -- TODO: reduce
+                                "-t" -> printFA $ minimize $ wellDefined dfa
                                 otherwise -> error "First argument should be '-i' or '-t'"
-            print dfa -- debug print whole DFA structure
-
-
-
--- import Control.DeepSeq
--- import System.IO
-
--- main = do
---   contents <- getContents
---   contents `deepseq` putStr contents
