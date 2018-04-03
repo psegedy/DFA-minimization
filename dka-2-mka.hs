@@ -99,7 +99,7 @@ kDistingInit dfa = ((states dfa) \\ (fStates dfa)) : (fStates dfa) : []
 -- TODO: sort kDists before eqPartitions
 -- map sort []
 
-minStates dfa = zip [1..] . sort . map sort $ getKDist dfa (states dfa) (getKDist' dfa)
+minStates dfa = zip [1..] . sort . map sort $ filter (not . null) $  getKDist dfa (states dfa) (getKDist' dfa)
 minStartStates dfa = show . head $ map (\x -> fst x) $ filter (\x -> snd x == True) $ map (\x -> (fst x, (sState dfa) `elem` snd x)) (minStates dfa)
 
 minFinStates dfa [] = []
@@ -119,22 +119,53 @@ sortByLength list = concat (groupBy ((==) `on` length) $ sortBy (compare `on` le
 getKDist dfa states [] = []
 getKDist dfa states (x:xs)
     | length states > 0 = (intersect x states) : getKDist dfa (states \\ x) xs
-    | otherwise = getKDist dfa x []
+    | otherwise = getKDist dfa x xs
 
 getKDist' dfa = sortByLength $ nub $ concat $ map (kDisting dfa (kDistingInit dfa) (kDistingInit dfa)) (chunksOf 1 (alphabet dfa))
 
+-- sameGroup = [ x | x <- getKDist' dfa, getDsts dfa x "a" ]
 
-kDisting dfa [] kDists sym = []
+-- getCommonGroup dfa kDists
+
+-- getDstsForGroups dfa [] alpha = []
+-- getDstsForGroups dfa (x:xs) alpha = getDsts dfa x alpha : getDstsForGroups dfa xs alpha
+
+-- f :: DFA -> [[String]] -> String -> [[String]]
+-- f dfa [] sym = []
+-- f dfa (x:xs) sym
+--     | sortListElems (getDsts dfa x sym) == (concat $ (getDests dfa (f dfa xs sym) sym)) = x : f dfa xs sym
+--     | otherwise = f dfa xs sym
+
+-- getNext [] = []
+-- getNext (x:_) = x
+
+getDstsForGroups dfa [] alpha = []
+getDstsForGroups dfa (x:xs) alpha = getDsts dfa x alpha : getDstsForGroups dfa xs alpha
+
+sortListElems :: Ord a => [[a]] -> [[a]]
+sortListElems = map sort
+
+
+kDisting dfa [[]] _ _ = []
+kDisting dfa [] _ _ = []
 kDisting dfa (x:xs) kDists sym
-    | eqPartitions dfa x sym (map sort kDists) = x : kDisting dfa xs kDists sym
-    | otherwise = kDisting dfa (xs ++ splitGroup) (kDists ++ splitGroup) sym
+    | trace ("A x = " ++ show x ++ "xs= " ++ show xs) eqPartitions dfa x sym (map sort kDists) = x : kDisting dfa xs kDists sym
+    | trace ("B x = " ++ show x ++ "xs= " ++ show xs) otherwise = kDisting dfa (xs ++ splitGroup) (kDists ++ splitGroup) sym
     where 
-        -- splitGroup = nub $ map (nub . getSrcs dfa sym x) (getDsts dfa x sym)
+        -- splitGroup = nub $ map (nub . getSrcs dfa sym) (getDsts dfa x sym)
+        -- commonGroup [] part = []
+        -- commonGroup (y:ys) part
+        --     |  y `elem` part = (getSrcs dfa sym y) : commonGroup ys part
+        --     | otherwise = commonGroup ys part
+        -- splitGroup = nub $ map (concat . commonGroup (getDsts dfa x sym)) kDists
+
         commonGroup [] part = []
         commonGroup (y:ys) part
-            | y `elem` part = (getSrcs dfa sym part y) : commonGroup ys part
-            | otherwise = commonGroup ys part
-        splitGroup = concat $ nub $ map (commonGroup (getDsts dfa x sym)) (reverse kDists)
+            | trace ("C y = " ++ show y ++ "part = " ++ show part) (getDst dfa sym y) \\ part == [] = y : commonGroup ys part
+            | trace ("D y = " ++ show y ++ "part = " ++ show part) otherwise = commonGroup ys part
+        splitGroup = nub $ map (commonGroup x) kDists
+
+--(intersect (getSrcs dfa sym y) part)
 
 -- commonGroup [] part = []
 -- commonGroup (x:xs) part
@@ -162,10 +193,12 @@ getDst dfa sym src = [x !! 2 | x <- (map (\t -> [start t, symbol t, dest t]) (tr
 getDsts :: DFA -> [String] -> String -> [String]
 getDsts dfa src sym = nub . concat $ map (getDst dfa sym) src
 
+-- getDests dfa [] sym = []
+-- getDests dfa (x:xs) sym = getDsts dfa x sym  : getDests dfa xs sym
+
 -- get sources to given dest and symbol
--- return only these which are in <states>
-getSrcs :: DFA -> String -> [String] -> String -> [String]
-getSrcs dfa sym states dst = intersect states [x !! 0 | x <- (map (\t -> [start t, symbol t, dest t]) (transitions dfa)), x !! 2 == dst, x !! 1 == sym]
+getSrcs :: DFA -> String -> String -> [String]
+getSrcs dfa sym dst = [x !! 0 | x <- (map (\t -> [start t, symbol t, dest t]) (transitions dfa)), x !! 2 == dst, x !! 1 == sym]
 
 -- alphabet list -> [String]
 -- (chunksOf 1 (alphabet dfa))
