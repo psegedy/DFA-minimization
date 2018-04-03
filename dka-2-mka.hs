@@ -99,16 +99,20 @@ kDistingInit dfa = ((states dfa) \\ (fStates dfa)) : (fStates dfa) : []
 -- TODO: sort kDists before eqPartitions
 -- map sort []
 
-minStates dfa = zip [1..] . sort . map sort $ filter (not . null) $  getKDist dfa (states dfa) (getKDist' dfa)
+minStates dfa = zip [1..] . sort . map sort $ filter (not . null) $  getKDist dfa (states dfa) (sortByLength $ getKDist'' dfa (kDistingInit dfa) (getKDist' dfa))
+-- minStates dfa = zip [1..] . sort . map sort $ filter (not . null) $  getKDist dfa (states dfa) (getKDist' dfa)
 minStartStates dfa = show . head $ map (\x -> fst x) $ filter (\x -> snd x == True) $ map (\x -> (fst x, (sState dfa) `elem` snd x)) (minStates dfa)
 
 minFinStates dfa [] = []
 minFinStates dfa (y:ys) = (show . head $ map (\x -> fst x) $ filter (\x -> snd x == True) $ map (\x -> (fst x, y `elem` snd x)) (minStates dfa)) : minFinStates dfa ys
 
+minTransitions dfa sym = [[Transition {start = show (fst x), symbol = sym, dest = show (fst y)}] | x <- minStates dfa, y <- minStates dfa, (sort $ getDsts dfa (snd x) sym) \\ snd y == []]
+
 minimize dfa = DFA {
     states = map (show . fst) (minStates dfa),
     alphabet = alphabet dfa,
-    transitions = transitions dfa,
+    transitions = concat $ map (concat . minTransitions dfa) (chunksOf 1 (alphabet dfa)),
+    -- transitions = transitions dfa,
     sState = minStartStates dfa,
     fStates = nub $ minFinStates dfa (fStates dfa)
 }
@@ -118,10 +122,19 @@ sortByLength list = concat (groupBy ((==) `on` length) $ sortBy (compare `on` le
 
 getKDist dfa states [] = []
 getKDist dfa states (x:xs)
-    | length states > 0 = (intersect x states) : getKDist dfa (states \\ x) xs
-    | otherwise = getKDist dfa x xs
+    | {-trace ("length = " ++ show (length states) ++ " x = " ++ show x ++ "inters = " ++ show (intersect x states) ++ "xs= " ++ show xs ++ " x:xs= " ++ show (x:xs))-} length states > 0 = (intersect x states) : getKDist dfa (states \\ x) xs
+    -- | otherwise = getKDist dfa x xs
+    | otherwise = []
 
 getKDist' dfa = sortByLength $ nub $ concat $ map (kDisting dfa (kDistingInit dfa) (kDistingInit dfa)) (chunksOf 1 (alphabet dfa))
+
+getKDist'' dfa input output
+    | input == output = output
+    | otherwise = getKDist'' dfa output (nub $ output ++ getKDist''')
+        where
+            getKDist''' = nub $ concat $ map (kDisting dfa output output) (chunksOf 1 (alphabet dfa))
+
+
 
 -- sameGroup = [ x | x <- getKDist' dfa, getDsts dfa x "a" ]
 
@@ -139,18 +152,20 @@ getKDist' dfa = sortByLength $ nub $ concat $ map (kDisting dfa (kDistingInit df
 -- getNext [] = []
 -- getNext (x:_) = x
 
-getDstsForGroups dfa [] alpha = []
-getDstsForGroups dfa (x:xs) alpha = getDsts dfa x alpha : getDstsForGroups dfa xs alpha
+getDstsForGroups dfa [] sym = []
+getDstsForGroups dfa (x:xs) sym = getDsts dfa x sym : getDstsForGroups dfa xs sym
 
 sortListElems :: Ord a => [[a]] -> [[a]]
 sortListElems = map sort
 
 
+-- kDisting dfa [[[]]] _ _ = []
 kDisting dfa [[]] _ _ = []
 kDisting dfa [] _ _ = []
+kDisting dfa ([]:xs) kDists sym = kDisting dfa xs kDists sym
 kDisting dfa (x:xs) kDists sym
-    | trace ("A x = " ++ show x ++ "xs= " ++ show xs) eqPartitions dfa x sym (map sort kDists) = x : kDisting dfa xs kDists sym
-    | trace ("B x = " ++ show x ++ "xs= " ++ show xs) otherwise = kDisting dfa (xs ++ splitGroup) (kDists ++ splitGroup) sym
+    | {-trace ("A x = " ++ show x ++ "xs= " ++ show xs ++ " x:xs= " ++ show (x:xs))-} eqPartitions dfa x sym (map sort kDists) = x : kDisting dfa xs kDists sym
+    | {-trace ("B x = " ++ show x ++ "xs= " ++ show xs)-} otherwise = kDisting dfa (xs ++ splitGroup) (kDists ++ splitGroup) sym
     where 
         -- splitGroup = nub $ map (nub . getSrcs dfa sym) (getDsts dfa x sym)
         -- commonGroup [] part = []
@@ -161,8 +176,8 @@ kDisting dfa (x:xs) kDists sym
 
         commonGroup [] part = []
         commonGroup (y:ys) part
-            | trace ("C y = " ++ show y ++ "part = " ++ show part) (getDst dfa sym y) \\ part == [] = y : commonGroup ys part
-            | trace ("D y = " ++ show y ++ "part = " ++ show part) otherwise = commonGroup ys part
+            | {-trace ("C y = " ++ show y ++ "part = " ++ show part)-} (getDst dfa sym y) \\ part == [] = y : commonGroup ys part
+            | {-trace ("D y = " ++ show y ++ "part = " ++ show part)-} otherwise = commonGroup ys part
         splitGroup = nub $ map (commonGroup x) kDists
 
 --(intersect (getSrcs dfa sym y) part)
@@ -256,7 +271,7 @@ main = do
         else do
             content <- getMyContents args
             let dfa = readDFA $ lines content
-            print $ length content -- hack, avoid lazy evaluation - do it properly with deepseq if needed
+            -- print $ length content -- hack, avoid lazy evaluation - do it properly with deepseq if needed
             case (head args) of "-i" -> printFA dfa
                                 "-t" -> printFA $ minimize dfa -- TODO: reduce
                                 otherwise -> error "First argument should be '-i' or '-t'"
