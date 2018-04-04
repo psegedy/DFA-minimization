@@ -42,7 +42,7 @@ sndNotEmpty x
 
 -- second elem in tuple (transitions symbol) is longer than 1
 -- split it to multiple tuples
-multipleTransitions x = concat $ map (zip (fst x)) (chunksOf 1 (snd x))
+multipleTransitions x = concat $ map (zip [(fst x)]) (chunksOf 1 (snd x))
 
 -- Make DFA well defined - add sink state
 wellDefined dfa
@@ -52,7 +52,7 @@ wellDefined dfa
                       } -- add sink state
 
 -- get missing transitions in [Transition] format
-missingTransitions dfa = map (\x -> Transition [(fst x)] (show $ newStateNum dfa) [(snd x)]) missing
+missingTransitions dfa = map (\x -> Transition (fst x) (show $ newStateNum dfa) [(snd x)]) missing
     where
         -- [("1",""),("2","a"),("3","ab")]
         zipped = zip (statesWithSink dfa) $ map (missingSymbols dfa) (statesWithSink dfa)
