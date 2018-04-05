@@ -14,7 +14,7 @@ import           Debug.Trace
 data Transition = Transition    { start  :: String
                                 , dest   :: String
                                 , symbol :: String
-                                } deriving (Show, Eq)
+                                } deriving (Show, Eq, Ord)
 
 -- Define deterministic finite automata
 data DFA = DFA  { states      :: [String]
@@ -83,7 +83,7 @@ minTransitions dfa sym = [[Transition {start = show (fst x), symbol = sym, dest 
 minimize dfa = DFA {
     states = map (show . fst) (minStates dfa),
     alphabet = alphabet dfa,
-    transitions = concat $ map (concat . minTransitions dfa) (chunksOf 1 (alphabet dfa)),
+    transitions = sort $ concat $ map (concat . minTransitions dfa) (chunksOf 1 (alphabet dfa)),
     sState = minStartStates dfa,
     fStates = nub $ minFinStates dfa (fStates dfa)
 }
@@ -100,7 +100,9 @@ getKDist dfa states (x:xs)
     | length states > 0 = (intersect x states) : getKDist dfa (states \\ x) xs
     | otherwise = []
 
-getKDist' dfa = sortByLength $ nub $ concat $ map (kDisting dfa (kDistingInit dfa) (kDistingInit dfa)) (chunksOf 1 (alphabet dfa))
+
+-- make k-distinguishable groups
+getKDist' dfa = getKDist dfa (states dfa) (sortByLength $ nub $ concat $ map (kDisting dfa (kDistingInit dfa) (kDistingInit dfa)) (chunksOf 1 (alphabet dfa)))
 
 getKDist'' dfa input output
     | input == output = output
@@ -118,8 +120,10 @@ kDisting dfa (x:xs) kDists sym
     where
         commonGroup [] part = []
         commonGroup (y:ys) part
-            | (getDst dfa sym y) \\ part == [] = y : commonGroup ys part
+            | (dst /= []) && (dst \\ part == []) = y : commonGroup ys part
             | otherwise = commonGroup ys part
+            where
+                dst = getDst dfa sym y
         splitGroup = nub $ map (commonGroup x) kDists
 
 
