@@ -4,11 +4,11 @@
 
 module Main where
 
-import           Data.List
-import           Data.List.Split
-import           Data.Function
-import           System.Environment
-import           Debug.Trace
+import Data.List
+import Data.List.Split
+import Data.Function
+import System.Environment
+import Debug.Trace
 
 -- Data structure for transitions of finite automata
 data Transition = Transition    { start  :: String
@@ -148,18 +148,25 @@ getDst dfa sym src = [x !! 2 | x <- (map (\t -> [start t, symbol t, dest t]) (tr
 getDsts :: DFA -> [String] -> String -> [String]
 getDsts dfa src sym = nub . concat $ map (getDst dfa sym) src
 
--- Check that args are correct
-validArgs args
-    | not $ elem (length args) [1,2] = False        -- more than 2 args
-    | not $ elem (args !! 0) ["-i", "-t"] = False   -- first arg must be '-i' or '-t'
-    | elem "-i" args && elem "-t" args = False      -- ./dka-2-mka -i -t
-    | otherwise = True
+-- parse arguments - insired by parsing in TuringMain.hs example from exercises
+parseArgs :: [String] -> (Bool, String)
+parseArgs [] = error "Expects 1 or 2 arguments"
+parseArgs [x]
+    | x == "-t" = (True, "")
+    | x == "-i" = (False, "")
+    | otherwise = error "First argument should be '-i' or '-t'"
+parseArgs [x,y]
+    | x `elem` ["-i","-t"] && y `elem` ["-i","-t"] = error "Do not use '-i' and '-t' together"
+    | x == "-t" = (True, y)
+    | x == "-i" = (False, y)
+    | otherwise = error "First argument should be '-i' or '-t'"
+parseArgs _ = error "Too many arguments - 1 or 2 arguments expected"
 
 -- Read stdin or file
 -- return content
-getMyContents args
-    | length args == 1 = getContents
-    | otherwise        = readFile $ args !! 1
+getMyContents file
+    | file == "" = getContents
+    | otherwise  = readFile file
 
 -- Get transitions from input and store them as [Transition]
 getTransitions :: [String] -> [Transition]
@@ -193,11 +200,9 @@ printFA fa = do
 
 main = do
     args <- getArgs
-    if not $ validArgs args
-        then error "Invalid arguments"
-        else do
-            content <- getMyContents args
-            let dfa = readDFA $ lines content
-            case (head args) of "-i" -> printFA dfa
-                                "-t" -> printFA $ minimize $ wellDefined dfa
-                                otherwise -> error "First argument should be '-i' or '-t'"
+    let (reduce, filepath) = parseArgs args
+    content <- getMyContents filepath
+    let dfa = readDFA $ lines content
+    if reduce
+        then printFA $ minimize $ wellDefined dfa
+        else printFA dfa
